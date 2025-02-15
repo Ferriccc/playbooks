@@ -1,0 +1,82 @@
+- name: WSL dotfiles
+  hosts: localhost
+  vars_files:
+    - vault.yml
+
+  tasks:
+    - name: Clone the yay repository
+      ansible.builtin.git:
+        repo: https://aur.archlinux.org/yay.git
+        dest: "{{ playbook_dir }}/yay"
+        version: master
+        clone: true
+        update: true
+      notify: Build yay
+      tags: sync
+
+    - name: Install packages with yay
+      community.general.pacman:
+        name: 
+          - bat
+          - eza
+          - git
+          - github-cli
+          - less
+          - man-db
+          - neovim
+          - npm
+          - openssh
+          - python-pynvim
+          - ripgrep
+          - rustup
+          - starship
+          - unzip
+          - zoxide
+        state: latest
+        update_cache: true
+        executable: yay
+      tags: sync
+
+    - name: Setup rustup 
+      command: "rustup default stable"
+
+    - name: Install packages with cargo
+      community.general.cargo:
+        name: tree-sitter-cli
+        state: latest
+
+    - name: Set git credentials
+      command: "{{ item }}"
+      loop:
+        - git config --global user.name ferriccc
+        - git config --global user.email shrey.260904@gmail.com
+      tags: setup
+
+    - name: Clone dotfiles repository as a bare repo
+      ansible.builtin.git:
+        repo: "https://x-access-token:{{ github_token }}@github.com/Ferriccc/dotfiles"
+        dest: "{{ ansible_env.HOME }}/.dotfiles.git"
+        version: main
+        bare: true
+        update: true
+      notify: Checkout dotfiles
+      tags: sync
+
+    - name: Configure bare dotfiles repo to only show tracked file
+      command: "{{ item }}"
+      loop:
+        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} config --local status.showUntrackedFiles no"
+      tags: setup
+
+  handlers:
+    - name: Build yay
+      command: makepkg -si --noconfirm
+      args:
+        chdir: "{{ playbook_dir }}/yay"
+
+    - name: Checkout dotfiles
+      command: "{{ item }}"
+      loop:
+        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} checkout"
+        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} fetch --all"
+        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} reset --hard"
