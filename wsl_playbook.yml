@@ -1,5 +1,7 @@
 - name: WSL dotfiles
   hosts: localhost
+  vars:
+    dotfiles: "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }}"
   vars_files:
     - vault.yml
 
@@ -12,7 +14,6 @@
         clone: true
         update: true
       notify: Build yay
-      tags: sync
 
     - name: Install packages with yay
       community.general.pacman:
@@ -35,7 +36,6 @@
         state: latest
         update_cache: true
         executable: yay
-      tags: sync
 
     - name: Setup rustup 
       command: "rustup default stable"
@@ -50,7 +50,6 @@
       loop:
         - git config --global user.name ferriccc
         - git config --global user.email shrey.260904@gmail.com
-      tags: setup
 
     - name: Clone dotfiles repository as a bare repo
       ansible.builtin.git:
@@ -60,13 +59,20 @@
         bare: true
         update: true
       notify: Checkout dotfiles
-      tags: sync
 
     - name: Configure bare dotfiles repo to only show tracked file
       command: "{{ item }}"
       loop:
-        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} config --local status.showUntrackedFiles no"
-      tags: setup
+        - "dotfiles config --local status.showUntrackedFiles no"
+
+    - name: Automatically push tracked files to remote
+      command: "dotfiles add {{ ansible_env.HOME }}/{{ item }}"
+      loop:
+        - ".bashrc"
+        - "scripts/"
+        - ".config/nvim/"
+      notify: Commit changes
+      tags: push
 
   handlers:
     - name: Build yay
@@ -77,6 +83,10 @@
     - name: Checkout dotfiles
       command: "{{ item }}"
       loop:
-        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} checkout"
-        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} fetch --all"
-        - "git --git-dir={{ ansible_env.HOME }}/.dotfiles.git --work-tree={{ ansible_env.HOME }} reset --hard"
+        - "dotfiles checkout"
+        - "dotfiles fetch --all"
+        - "dotfiles reset --hard"
+
+    - name: Commit changes
+      command: "dotfiles commit -m \"automated commit using playbook\" && dotfiles push origin main"
+      ignore_errors: true
