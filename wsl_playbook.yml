@@ -63,10 +63,10 @@
     - name: Configure bare dotfiles repo to only show tracked file
       command: "{{ item }}"
       loop:
-        - "dotfiles config --local status.showUntrackedFiles no"
+        - "{{ dotfiles }} config --local status.showUntrackedFiles no"
 
     - name: Automatically push tracked files to remote
-      command: "dotfiles add {{ ansible_env.HOME }}/{{ item }}"
+      command: "{{ dotfiles }} add {{ ansible_env.HOME }}/{{ item }}"
       loop:
         - ".bashrc"
         - "scripts/"
@@ -83,10 +83,13 @@
     - name: Checkout dotfiles
       command: "{{ item }}"
       loop:
-        - "dotfiles checkout"
-        - "dotfiles fetch --all"
-        - "dotfiles reset --hard"
+        - "{{ dotfiles }} checkout"
+        - "{{ dotfiles }} fetch --all"
+        - "{{ dotfiles }} reset --hard"
 
     - name: Commit changes
-      command: "dotfiles commit -m \"automated commit using playbook\" && dotfiles push origin main"
+      command: "{{ item }}"
+      loop:
+        - "{{ dotfiles }} commit -m \"automated commit using playbook\""
+        - "{{ dotfiles }} push origin main"
       ignore_errors: true
