@@ -6,50 +6,25 @@
     - vault.yml
 
   tasks:
-    - name: Clone the yay repository
-      ansible.builtin.git:
-        repo: https://aur.archlinux.org/yay.git
-        dest: "{{ playbook_dir }}/yay"
-        version: master
-        clone: true
-        update: true
-      notify: Build yay
 
-    - name: Install packages with yay
-      community.general.pacman:
-        name: 
-          - bat
-          - eza
-          - git
-          - github-cli
-          - less
-          - man-db
-          - neovim
-          - npm
-          - openssh
-          - python-pynvim
-          - ripgrep
-          - rustup
-          - starship
-          - unzip
-          - zoxide
-        state: latest
-        update_cache: true
-        executable: yay
-
-    - name: Setup rustup 
-      command: "rustup default stable"
-
-    - name: Install packages with cargo
-      community.general.cargo:
-        name: tree-sitter-cli
-        state: latest
+    ### Setup tagged tasks are meant to be run once as they setup the basic environment to run further tasks
 
     - name: Set git credentials
       command: "{{ item }}"
       loop:
         - git config --global user.name ferriccc
         - git config --global user.email shrey.260904@gmail.com
+      tags: setup
+
+    - name: Clone the yay repository
+      command: "git clone https://aur.archlinux.org/yay.git {{ ansible_env.HOME }}/yay"
+      tags: setup
+
+    - name: Build yay
+      command: makepkg -si --noconfirm
+      args:
+        chdir: "{{ ansible_env.HOME }}/yay"
+      tags: setup
 
     - name: Clone dotfiles repository as a bare repo
       ansible.builtin.git:
@@ -58,12 +33,56 @@
         version: main
         bare: true
         update: true
-      notify: Checkout dotfiles
+      tags: setup
 
     - name: Configure bare dotfiles repo to only show tracked file
       command: "{{ item }}"
       loop:
         - "{{ dotfiles }} config --local status.showUntrackedFiles no"
+      tags: setup
+
+    ### Sync tagged tasks are meant to update every package and sync dotfiles from remote
+
+    - name: Install packages with yay
+      command: "yay -S --noconfirm {{ item }}"
+      loop: 
+        - go
+        - bat
+        - eza
+        - git
+        - github-cli
+        - less
+        - man-db
+        - neovim
+        - npm
+        - openssh
+        - python-pynvim
+        - ripgrep
+        - rustup
+        - starship
+        - unzip
+        - zoxide
+      tags: sync
+
+    - name: Setup rustup 
+      command: "rustup default stable"
+      tags: sync
+
+    - name: Install packages with cargo
+      command: "cargo install {{ item }}"
+      loop:
+        - tree-sitter-cli
+      tags: sync
+
+    - name: Checkout dotfiles
+      command: "{{ item }}"
+      loop:
+        - "{{ dotfiles }} checkout -f"
+        - "{{ dotfiles }} fetch --all"
+        - "{{ dotfiles }} reset --hard"
+      tags: sync
+
+    ### Push tagged tasks are meant to push local changes to remote and track defined files only
 
     - name: Automatically push tracked files to remote
       command: "{{ dotfiles }} add {{ ansible_env.HOME }}/{{ item }}"
@@ -71,25 +90,12 @@
         - ".bashrc"
         - "scripts/"
         - ".config/nvim/"
-      notify: Commit changes
       tags: push
-
-  handlers:
-    - name: Build yay
-      command: makepkg -si --noconfirm
-      args:
-        chdir: "{{ playbook_dir }}/yay"
-
-    - name: Checkout dotfiles
-      command: "{{ item }}"
-      loop:
-        - "{{ dotfiles }} checkout"
-        - "{{ dotfiles }} fetch --all"
-        - "{{ dotfiles }} reset --hard"
 
     - name: Commit changes
       command: "{{ item }}"
       loop:
         - "{{ dotfiles }} commit -m \"automated commit using playbook\""
         - "{{ dotfiles }} push origin main"
-      ignore_errors: true
+      ignore_errors: true # in case there is nothing to commit
+      tags: push
