@@ -86,10 +86,11 @@
 
     - name: Automatically push tracked files to remote
       command: "{{ dotfiles }} add {{ ansible_env.HOME }}/{{ item }}"
-      loop:
+      loop: 
         - ".bashrc"
         - "scripts/"
         - ".config/nvim/"
+        - "fun/"
       tags: push
 
     - name: Commit changes
